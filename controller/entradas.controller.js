@@ -1,10 +1,10 @@
 import { Entradas } from '../models/entradas.models.js';
 import { Espacio } from '../models/espacio.models.js';
 import { Vehiculos } from '../models/vehiculos.models.js';
-
+import { HistorialEntradasSalidas } from '../models/historial.models.js';
 
 export const obtenerTodasLasEntradasSalidas = async (req, res) => {
-  const { dias } = req.query; 
+  const { dias, activo } = req.query;
 
   try {
     const vehiculos = await Entradas.findAll({
@@ -16,7 +16,7 @@ export const obtenerTodasLasEntradasSalidas = async (req, res) => {
             model: Espacio,
             attributes: ['numero', 'tipo'],
             where: {
-              estado: 'ocupado', 
+              estado: 'ocupado',
             },
           },
         },
@@ -32,7 +32,9 @@ export const obtenerTodasLasEntradasSalidas = async (req, res) => {
 
     let resultado = vehiculos;
 
-    if (dias && !isNaN(dias)) {
+    if (activo === 'true') {
+      resultado = vehiculos.filter(entrada => !entrada.hora_salida);
+    } else if (dias && !isNaN(dias)) {
       const haceNDias = new Date();
       haceNDias.setDate(haceNDias.getDate() - parseInt(dias, 10));
       resultado = vehiculos.filter(entrada => new Date(entrada.hora_entrada) < haceNDias);
@@ -81,19 +83,18 @@ export const obtenerTodasLasEntradasSalidas = async (req, res) => {
   }
 };
 
-
 export const obtenerVehiculosMasDe7Dias = async (req, res) => {
-  const {dias} = req.query;
-  if(dias > 200){
+  const { dias } = req.query;
+  if (dias > 200) {
     return res.status(400).json({
       success: false,
       message: 'El parámetro de consulta "dias" debe ser menor a 200.'
     });
   }
-  
+
   try {
     const hace7Dias = new Date();
-  hace7Dias.setDate(hace7Dias.getDate() -parseInt(dias || 7 , 10));
+    hace7Dias.setDate(hace7Dias.getDate() - parseInt(dias || 7, 10));
 
     const vehiculos = await Entradas.findAll({
       where: {
@@ -107,7 +108,7 @@ export const obtenerVehiculosMasDe7Dias = async (req, res) => {
             model: Espacio,
             attributes: ['numero'],
             where: {
-              estado: 'ocupado', // Asegurarse de que el espacio esté ocupado
+              estado: 'ocupado',
             },
           },
         },
@@ -143,13 +144,11 @@ export const obtenerVehiculosMasDe7Dias = async (req, res) => {
   }
 };
 
-
 export const registrarEntradaVehiculo = async (req, res) => {
-  const { id_vehiculo } = req.body; 
+  const { id_vehiculo } = req.body;
   console.log(id_vehiculo);
 
   try {
-
     const vehiculo = await Vehiculos.findOne({ where: { id: id_vehiculo } });
     if (!vehiculo) {
       return res.status(404).json({
@@ -158,7 +157,14 @@ export const registrarEntradaVehiculo = async (req, res) => {
       });
     }
 
-    // Verificar si el vehículo ya tiene un espacio asignado
+    const entradaSinSalida = await Entradas.findOne({ where: { id_vehiculoFK: id_vehiculo, hora_salida: null } });
+    if (entradaSinSalida) {
+      return res.status(400).json({
+        success: false,
+        message: 'El vehículo ya tiene una entrada registrada sin salida',
+      });
+    }
+
     const espacio = await Espacio.findOne({ where: { id_vehiculoFK: id_vehiculo, estado: 'ocupado' } });
     if (!espacio) {
       return res.status(400).json({
@@ -167,35 +173,35 @@ export const registrarEntradaVehiculo = async (req, res) => {
       });
     }
 
-    // Registrar la entrada del vehículo
     const nuevaEntrada = await Entradas.create({
       id_vehiculoFK: id_vehiculo,
       hora_entrada: new Date(),
       hora_salida: null,
     });
 
+    // Registrar en el historial
+    await HistorialEntradasSalidas.create({
+      id_vehiculo: id_vehiculo,
+      hora_entrada: nuevaEntrada.hora_entrada,
+    });
+
     res.status(201).json({
       success: true,
       message: 'Entrada registrada correctamente',
-    
     });
   } catch (error) {
     console.error('Error al registrar la entrada del vehículo:', error);
     res.status(500).json({
       success: false,
-      message: 'Error al registrar la entrada del vehículo',
+      message: 'Ocurrio un error inesperado',
     });
   }
 };
 
-
-
-
 export const registrarSalidaVehiculo = async (req, res) => {
-  const { id_vehiculo } = req.body; 
+  const { id_vehiculo } = req.body;
 
   try {
-    // Verificar si el vehículo existe
     const vehiculo = await Vehiculos.findOne({ where: { id: id_vehiculo } });
     if (!vehiculo) {
       return res.status(404).json({
@@ -204,7 +210,6 @@ export const registrarSalidaVehiculo = async (req, res) => {
       });
     }
 
-   
     const entrada = await Entradas.findOne({
       where: {
         id_vehiculoFK: id_vehiculo,
@@ -218,16 +223,19 @@ export const registrarSalidaVehiculo = async (req, res) => {
       });
     }
 
-   
     entrada.hora_salida = new Date();
+    entrada.activo = false;
     await entrada.save();
 
-    
+    // Actualizar el historial
+    await HistorialEntradasSalidas.update(
+      { hora_salida: entrada.hora_salida },
+      { where: { id_vehiculo: id_vehiculo, hora_salida: null } }
+    );
 
-    res.status(200).json({
+    res.status(201).json({
       success: true,
       message: 'Salida registrada correctamente',
-   
     });
   } catch (error) {
     console.error('Error al registrar la salida del vehículo:', error);

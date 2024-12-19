@@ -1,21 +1,15 @@
 import { Sequelize, DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
-
 import { Vehiculos } from './vehiculos.models.js';
 
-
-export const Entradas = sequelize.define('entradas', {
+export const HistorialEntradasSalidas = sequelize.define('historialEntradasSalidas', {
   id: {
     type: DataTypes.INTEGER,
     allowNull: false,
     primaryKey: true,
     autoIncrement: true,
   },
-  activo : {
-    type: DataTypes.BOOLEAN,
-    defaultValue: true,
-  },
-  id_vehiculoFK: {
+  id_vehiculo: {
     type: DataTypes.INTEGER,
     references: {
       model: Vehiculos,
@@ -23,12 +17,9 @@ export const Entradas = sequelize.define('entradas', {
     },
     allowNull: false,
   },
-  
-
   hora_entrada: {
     type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: Sequelize.NOW,
+    allowNull: true,
   },
   hora_salida: {
     type: DataTypes.DATE,
@@ -46,15 +37,6 @@ export const Entradas = sequelize.define('entradas', {
   timestamps: true,
 });
 
-Vehiculos.hasMany(Entradas, { foreignKey: 'id_vehiculoFK' });
-Entradas.belongsTo(Vehiculos, { foreignKey: 'id_vehiculoFK' });
+Vehiculos.hasMany(HistorialEntradasSalidas, { foreignKey: 'id_vehiculo' });
+HistorialEntradasSalidas.belongsTo(Vehiculos, { foreignKey: 'id_vehiculo' });
 
-
-
-sequelize.sync({ alter: true })
-  .then(() => {
-    console.log('Tablas sincronizadas y actualizadas');
-  })
-  .catch((error) => {
-    console.error('Error al sincronizar las tablas:', error);
-  });
