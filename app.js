@@ -4,6 +4,7 @@ import router from './routes/vehiculos.routes.js';
 import entradas from './routes/entradas.routes.js';
 import cors from 'cors';
 import bodyParser from 'body-parser';
+import historial from './routes/historial.routes.js';
 const app = express();
 const port = 3002;
 
@@ -21,6 +22,7 @@ app.use(express.json());
 
 app.use('/api', router);
 app.use(entradas) 
+app.use(historial)
 
 const testConnection = async () => {
   try {
